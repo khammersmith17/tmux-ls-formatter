@@ -1,5 +1,5 @@
 [package]
-name = "tmux-printer"
+name = "tmux-ls-printer"
 version = "0.1.0"
 edition = "2024"
 
