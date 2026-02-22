@@ -1,10 +1,20 @@
 use std::fmt;
 use std::process::Command;
+use std::sync::OnceLock;
 
 const BOLD_GREEN_ANSI: &'static str = "\x1b[1;32m";
 const BOLD_WHITE_ANSI: &'static str = "\x1b[1;37m";
-const NAME_COLUMN_WIDTH: usize = 13;
-const WINDOWS_OPEN_COLUMN_WIDTH: usize = 14;
+const DEFAULT_NAME_COLUMN_WIDTH: usize = 6;
+const WINDOWS_OPEN_COLUMN_WIDTH: usize = 12;
+const DEFAULT_TS_COLUMN_WIDTH: usize = 12;
+const HEADER_SEP_PADDING: usize = 6;
+
+const NAME_HEADER: &'static str = "Name";
+const WINDOW_HEADER: &'static str = "Windows Open";
+const TS_HEADER: &'static str = "Date Created";
+
+static NAME_COLUMN_WIDTH: OnceLock<usize> = OnceLock::new();
+static HEADER_SEP_WIDTH: OnceLock<usize> = OnceLock::new();
 
 #[derive(Debug)]
 struct TmuxSession {
@@ -13,28 +23,43 @@ struct TmuxSession {
     date_created: String,
 }
 
+fn set_column_widths(sessions: &[TmuxSession]) {
+    let (mut name_width, mut ts_width) = if sessions.is_empty() {
+        NAME_COLUMN_WIDTH.set(DEFAULT_NAME_COLUMN_WIDTH).unwrap();
+        (DEFAULT_NAME_COLUMN_WIDTH, DEFAULT_TS_COLUMN_WIDTH)
+    } else {
+        let mut max_session_name_len = 0_usize;
+        let mut max_ts_len = 0_usize;
+
+        for session in sessions {
+            max_session_name_len = usize::max(max_session_name_len, session.name.len());
+            max_ts_len = usize::max(max_ts_len, session.date_created.len());
+        }
+        (max_session_name_len, max_ts_len)
+    };
+    println!("{ts_width}");
+
+    name_width = usize::max(name_width + 1, DEFAULT_NAME_COLUMN_WIDTH);
+    ts_width = usize::max(ts_width, DEFAULT_TS_COLUMN_WIDTH);
+
+    NAME_COLUMN_WIDTH.set(name_width).unwrap();
+    HEADER_SEP_WIDTH
+        .set(name_width + WINDOWS_OPEN_COLUMN_WIDTH + ts_width + HEADER_SEP_PADDING)
+        .unwrap();
+}
+
 impl fmt::Display for TmuxSession {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut name = String::new();
-        name.push_str(&self.name);
-
-        let name_padding = NAME_COLUMN_WIDTH - self.name.len() - 1;
-        for _ in 0..name_padding {
-            name.push(' ');
-        }
-
-        let mut num_windows = String::new();
-        let win_str = self.num_windows.to_string();
-        num_windows.push_str(&win_str);
-        let window_padding = WINDOWS_OPEN_COLUMN_WIDTH - win_str.len() - 1;
-
-        for _ in 0..window_padding {
-            num_windows.push(' ');
-        }
-
         let line = format!(
-            " {}{}|\x1B[0m {}{}|\x1B[0m {}{}\x1B[0m",
-            BOLD_WHITE_ANSI, name, BOLD_WHITE_ANSI, num_windows, BOLD_WHITE_ANSI, self.date_created
+            " {}{:<name_col_width$}|\x1B[0m {}{:<nw_col_width$}|\x1B[0m {}{}\x1B[0m",
+            BOLD_WHITE_ANSI,
+            self.name,
+            BOLD_WHITE_ANSI,
+            self.num_windows,
+            BOLD_WHITE_ANSI,
+            self.date_created,
+            name_col_width = NAME_COLUMN_WIDTH.get().unwrap(),
+            nw_col_width = WINDOWS_OPEN_COLUMN_WIDTH + 1
         );
         write!(f, "{line}")
     }
@@ -101,17 +126,27 @@ impl TmuxSession {
 
 fn print_header() {
     println!(
-        " {}Name        \x1B[0m{}|\x1B[0m {}Windows Open \x1B[0m{}|\x1B[0m {}Date Created\x1B[0m",
-        BOLD_GREEN_ANSI, BOLD_WHITE_ANSI, BOLD_GREEN_ANSI, BOLD_WHITE_ANSI, BOLD_GREEN_ANSI
+        " {}{:<name_col_width$}\x1B[0m{}|\x1B[0m {}{:<window_col_width$} \x1B[0m{}|\x1B[0m {}{:<ts_col_width$}\x1B[0m",
+        BOLD_GREEN_ANSI,
+        NAME_HEADER,
+        BOLD_WHITE_ANSI,
+        BOLD_GREEN_ANSI,
+        WINDOW_HEADER,
+        BOLD_WHITE_ANSI,
+        BOLD_GREEN_ANSI,
+        TS_HEADER,
+        name_col_width = NAME_COLUMN_WIDTH.get().unwrap(),
+        window_col_width = WINDOWS_OPEN_COLUMN_WIDTH,
+        ts_col_width = DEFAULT_TS_COLUMN_WIDTH
     );
     println!(
-        "{}---------------------------------------------------------",
-        BOLD_WHITE_ANSI
+        "{}{}",
+        BOLD_WHITE_ANSI,
+        "-".repeat(*HEADER_SEP_WIDTH.get().unwrap())
     );
 }
 
 fn main() {
-    print_header();
     let tmux_output = Command::new("tmux").arg("ls").output().unwrap();
     let std_out = String::from_utf8(tmux_output.stdout).unwrap();
 
@@ -119,6 +154,9 @@ fn main() {
         .lines()
         .map(|l| TmuxSession::new(l.as_ref()))
         .collect::<Vec<TmuxSession>>();
+
+    set_column_widths(&tmux_sessions);
+    print_header();
 
     for session in &tmux_sessions {
         println!("{session}")
