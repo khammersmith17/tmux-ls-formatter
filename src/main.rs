@@ -25,7 +25,6 @@ struct TmuxSession {
 
 fn set_column_widths(sessions: &[TmuxSession]) {
     let (mut name_width, mut ts_width) = if sessions.is_empty() {
-        NAME_COLUMN_WIDTH.set(DEFAULT_NAME_COLUMN_WIDTH).unwrap();
         (DEFAULT_NAME_COLUMN_WIDTH, DEFAULT_TS_COLUMN_WIDTH)
     } else {
         let mut max_session_name_len = 0_usize;
@@ -37,7 +36,6 @@ fn set_column_widths(sessions: &[TmuxSession]) {
         }
         (max_session_name_len, max_ts_len)
     };
-    println!("{ts_width}");
 
     name_width = usize::max(name_width + 1, DEFAULT_NAME_COLUMN_WIDTH);
     ts_width = usize::max(ts_width, DEFAULT_TS_COLUMN_WIDTH);
