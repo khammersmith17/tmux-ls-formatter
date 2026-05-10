@@ -65,54 +65,24 @@ impl fmt::Display for TmuxSession {
 
 impl TmuxSession {
     fn new(tmux_line: &str) -> TmuxSession {
-        // name: n windows (date created)
-        let mut name = String::new();
-        let mut line_chars = tmux_line.chars();
+        let mut offset = 0_usize;
+        let name_end = tmux_line.find(':').unwrap();
+        let name = String::from(&tmux_line[offset..name_end]);
+        offset = name_end + 2;
 
-        while let Some(c) = line_chars.next() {
-            if c == ':' {
-                break;
-            }
-            name.push(c);
-        }
-
-        // skip the space
-        let _ = line_chars.next();
-        let mut num_win_str = String::new();
-
-        while let Some(c) = line_chars.next() {
-            if c == ' ' {
-                break;
-            }
-
-            num_win_str.push(c);
-        }
-
+        let num_win_end = tmux_line[offset..].find(' ').unwrap();
+        let num_win_str = String::from(&tmux_line[offset..offset + num_win_end]);
         let num_windows: u32 = num_win_str.parse().unwrap();
 
-        let mut date_created = String::new();
+        offset = num_win_end + 1;
 
-        let _ = line_chars.next();
+        let open_paren = tmux_line[offset..].find('(').unwrap();
+        offset += open_paren;
 
-        while let Some(c) = line_chars.next() {
-            if c == '(' {
-                break;
-            }
-        }
-
-        while let Some(c) = line_chars.next() {
-            if c == ' ' {
-                break;
-            }
-        }
-
-        while let Some(c) = line_chars.next() {
-            if c == ')' {
-                break;
-            }
-
-            date_created.push(c);
-        }
+        let next_space = tmux_line[offset..].find(' ').unwrap();
+        offset += next_space + 1;
+        let closed_paren = tmux_line[offset..].find(')').unwrap();
+        let date_created = String::from(&tmux_line[offset..offset + closed_paren]);
 
         TmuxSession {
             name,
